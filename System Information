@@ -1,0 +1,182 @@
+set progress description to "Processing system information..."
+set accessCode to "false"
+repeat with i from 1 to 5
+	try
+		do shell script "ping -o www.google.com"
+		exit repeat
+	on error
+		delay 1
+		set accessCode to "true"
+		if i = 5 then set conStaus to "Inactive"
+	end try
+end repeat
+if accessCode = "true" then
+	set conStatus to "Inactive"
+else if accessCode = "false" then
+	set conStatus to "Active"
+end if
+set sysinfo to system info
+set computerName to computer name of sysinfo
+set osVersion to system version of sysinfo
+set currentUser to short user name of sysinfo
+set userId to user ID of sysinfo
+set ipAddress to IPv4 address of sysinfo
+set localArea to user locale of sysinfo
+set ethernetAddress to primary Ethernet address of sysinfo
+set coreCount to (do shell script "sysctl -n hw.ncpu")
+set cpuType to CPU type of sysinfo
+set cpuSpeed to CPU speed of sysinfo
+set physMemMeg to physical memory of sysinfo
+if physMemMeg is less than or equal to 1000 then
+	set physMemGigUnit to " MB"
+else
+	set physMemGigUnit to " GB"
+end if
+set physMemGig to (round (physMemMeg / 1000))
+tell application "Finder" to set diskName to name of startup disk
+tell application "Finder" to set freeBytes to free space of disk diskName
+set freeBytesGigs to (freeBytes / (1024 * 1024 * 0.1024) div 100) / 100
+set macModel to (do shell script "system_profiler SPHardwareDataType | awk '/Model Identifier/ {print $3}'")
+set serialNumber to (do shell script "system_profiler SPHardwareDataType | awk '/Serial/ {print $4}'")
+set currentDate to "" & (month of (current date)) & " " & (day of (current date)) & ", " & (year of (current date)) & ""
+on returnNumbersInString(inputString)
+	set s to quoted form of inputString
+	do shell script "sed s/[a-zA-Z\\']//g <<< " & s
+	set dx to the result
+	set numlist to {}
+	repeat with i from 1 to count of words in dx
+		set this_item to word i of dx
+		try
+			set this_item to this_item as number
+			set the end of numlist to this_item
+		end try
+	end repeat
+	return numlist
+end returnNumbersInString
+set iconWarning to "⚠️"
+repeat 1 times
+	try
+		do shell script "pmset -g everything | grep Cycles"
+	on error
+		set pwrSource to ""
+		set pwr to ""
+		set charger to " --- "
+		set percentage to " --- "
+		set _t to "Time Remaining: --- "
+		set t to ""
+		set battHealth to " --- "
+		set cycles to " --- "
+		set batteryError to "⚠️"
+		exit repeat
+	end try
+	set x to the result
+	set charging to word 2 of x
+	if charging contains "Not" then
+		set charger to " (not charging)   " & iconWarning
+	else
+		set charger to " (charging)"
+	end if
+	if word 1 of x is "AC" then
+		set _t to "Time to Full Charge: "
+		set pwr to "AC"
+		set pwrSource to iconAC
+	else
+		set _t to "Time Remaining: "
+		set pwr to "Internal Battery"
+		set pwrSource to ""
+		set charger to ""
+	end if
+	set nums to returnNumbersInString(x)
+	set percentage to item 1 of nums
+	if percentage is less than or equal to 20 then
+		set percentage to item 1 of nums & "% (low battery)"
+	else if percentage is less than or equal to 5 then
+		set percentage to item 1 of nums & "% (critical battery)"
+	else
+		set percentage to item 1 of nums & "%"
+	end if
+	if item 5 of nums = 0 then
+		set hrmins to " minutes"
+	else if item 5 of nums = 1 then
+		set hrmins to " hour"
+	else
+		set hrmins to " hours"
+	end if
+	if item 5 of nums is greater than 4 then
+		if pwr is "AC" then
+			set t to "Calculating..."
+		end if
+	else
+		if item 6 of nums is less than 10 then
+			set theMins to item 6 of nums as string
+			set theMins to "0" & theMins as string
+		else
+			set theMins to item 6 of nums as integer
+		end if
+		set t to item 5 of nums & ":" & theMins & hrmins
+	end if
+	set FCC to item 3 of nums as integer
+	set designCap to item 4 of nums as integer
+	set battHealth to (FCC / (designCap / 100))
+	set battHealth to round (battHealth)
+	set battHealth to battHealth & "%"
+	set cycles to item -3 of nums
+	set batteryError to "True"
+end repeat
+on getTimeInHoursAndMinutes()
+	set timeStr to time string of (current date)
+	set Pos to offset of ":" in timeStr
+	set theHour to characters 1 thru (Pos - 1) of timeStr as string
+	set timeStr to characters (Pos + 1) through end of timeStr as string
+	set Pos to offset of ":" in timeStr
+	set theMin to characters 1 thru (Pos - 1) of timeStr as string
+	set timeStr to characters (Pos + 1) through end of timeStr as string
+	set Pos to offset of " " in timeStr
+	set theSfx to characters (Pos + 1) through end of timeStr as string
+	return (theHour & ":" & theMin & " " & theSfx) as string
+end getTimeInHoursAndMinutes
+set passCode to text returned of (display dialog "Enter your password to view important information about your device." default answer "" with icon note buttons {"Continue", "Cancel"} default button 1 with title "System Information" with hidden answer)
+if passCode = "5560931" then
+	display dialog "Computer Name: " & (computerName) & "
+Current OS: " & (osVersion) & "
+Current User: " & (currentUser) & "
+Current User ID: " & (userId) & "
+Public IP Address: " & (ipAddress) & "
+Local Area: " & (localArea) & "
+Mac Address: " & (ethernetAddress) & "
+Internet Status: " & (conStatus) & "
+Cores: " & (coreCount) & "
+CPU Type: " & (cpuType) & "
+CPU Speed: " & (cpuSpeed) & " GHz
+Memory: " & (physMemGig) & (physMemGigUnit) & "
+Disk Name: " & (diskName) & "
+Free Space: " & (freeBytesGigs) & " GB
+Model: " & (macModel) & "
+Serial: " & (serialNumber) & "
+Current Date: " & (currentDate) & "
+Current Time: " & (getTimeInHoursAndMinutes()) & "
+" & pwrSource & "Power Source: " & pwr & charger & return & "Current Charge: " & percentage & return & _t & t & return & "Battery Health: " & battHealth & return & "Remaining Cycles: " & cycles & return & "Battery Existence: " & batteryError with icon note buttons {"Performance", "Help", "Quit"} default button 1 with title "System Information"
+	if button returned of result = "Quit" then
+		quit
+	else if button returned of result = "Performance" then
+		tell application "Activity Monitor" to activate
+	else if button returned of result = "Help" then
+		set helpCategorie to (choose from list {"Battery", "Storage", "Memory", "Internet Status", "Model", "Credits"} with prompt "Select a subject." with title "System Information Help") as string
+		if helpCategorie = "Battery" then
+			display dialog "Battery percentage, cycles, health, and remaining battery time are all based off of approximate calculations. When plugging in the charger, it may say it isn't charging; this is because the computer hasn't fully understood what it is." with icon note buttons {"OK", "Cancel"} default button 1 with title "Help > Battery"
+		else if helpCategorie = "Storage" then
+			display dialog "Storage availability is based off of approximate calculations. If the value has a zero decimal, this may mean that you have only kilobytes or megabytes of storage left. " with icon note buttons {"OK", "Cancel"} default button 1 with title "Help > Storage"
+		else if helpCategorie = "Internet Status" then
+			display dialog "Internet status is determined using a ping technique. The program pings a common website. If the the program recieves a 100% packet loss, it assumes you are not connected to the internet. The program assumes you're connected to the internet if you recieve a 0 to 50% packet loss." with icon note buttons {"OK", "Cancel"} default button 1 with title "Help > Internet Status"
+		else if helpCategorie = "Memory" then
+			display dialog "Memory is based off of approximate calculations. The raw data is viewed as megabytes. An equation converts the megabytes into gigabytes. If the value has a zero decimal, it may mean that you have less than 8 GB or lower." with icon note buttons {"OK", "Cancel"} default button 1 with title "Help > Memory"
+		else if helpCategorie = "Model" then
+			display dialog "Almost all of the information obtained in System Information is from a shell command. Model just defines what type of Apple device you have." with icon note buttons {"OK", "Cancel"} default button 1 with title "Help > Model"
+		else if helpCategorie = "Credits" then
+			display dialog "Developer: Blake Zito" & return & "Research Engine: Google Chrome" & return & "Research Website 1: Stack Exchange" & return & "Research Website 2: GitHub" & return & "Research Website 3: AppleHelpWriter" & return & "Language: AppleScript" with icon note buttons {"OK", "Cancel"} default button 1 with title "Help > Credits"
+		end if
+	end if
+else
+	beep
+	display alert "Incorrect password." message "You have submitted the incorrect password. Please try again." as critical buttons {"OK"} default button 1
+end if
